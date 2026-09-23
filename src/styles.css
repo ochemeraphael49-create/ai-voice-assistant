@@ -1,172 +1,164 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+* {
+  box-sizing: border-box;
+}
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+html, body, #root {
+  margin: 0;
+  min-height: 100%;
+  width: 100%;
+  font-family: Inter, 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #0f172a, #111827 40%, #1f2937);
+  color: #e5e7eb;
+}
 
-export default function App() {
-  const [message, setMessage] = useState('');
-  const [history, setHistory] = useState([
-    {
-      id: 1,
-      sender: 'assistant',
-      text: 'Hi! I am your AI assistant. Ask me anything, or use the mic to speak.',
-    },
-  ]);
-  const [isListening, setIsListening] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState('');
-  const recognitionRef = useRef(null);
+button, input {
+  font: inherit;
+}
 
-  const SpeechRecognition = useMemo(() => {
-    const win = window;
-    return win.SpeechRecognition || win.webkitSpeechRecognition || null;
-  }, []);
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
 
-  useEffect(() => {
-    if (!SpeechRecognition) return;
+.app-card {
+  width: min(900px, 100%);
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 24px;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.45);
+  padding: 22px;
+}
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
 
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setMessage((prev) => prev ? `${prev} ${transcript}`.trim() : transcript);
-    };
+.eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  color: #7dd3fc;
+}
 
-    recognition.onend = () => {
-      setIsListening(false);
-    };
+h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+}
 
-    recognition.onerror = () => {
-      setError('Microphone recognition failed. Please try again.');
-      setIsListening(false);
-    };
+.mic-button {
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
+  color: white;
+  padding: 12px 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
 
-    recognitionRef.current = recognition;
+.mic-button:hover {
+  transform: translateY(-1px);
+}
 
-    return () => {
-      recognition.stop();
-    };
-  }, [SpeechRecognition]);
+.mic-button.live {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+}
 
-  const addMessage = (sender, text) => {
-    setHistory((prev) => [
-      ...prev,
-      {
-        id: Date.now() + Math.random(),
-        sender,
-        text,
-      },
-    ]);
-  };
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 400px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 8px 4px 18px;
+}
 
-  const speak = (text) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-    window.speechSynthesis.speak(utterance);
-  };
+.bubble {
+  max-width: 80%;
+  border-radius: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
 
-  const handleSend = async (textOverride) => {
-    const content = (textOverride ?? message).trim();
-    if (!content || isSending) return;
+.bubble.user {
+  align-self: flex-end;
+  background: rgba(59, 130, 246, 0.15);
+}
 
-    setError('');
-    setIsSending(true);
-    setMessage('');
-    addMessage('user', content);
+.bubble.assistant {
+  align-self: flex-start;
+  background: rgba(15, 118, 110, 0.18);
+}
 
-    try {
-      const response = await fetch(`${API_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content }),
-      });
+.label {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+}
 
-      const data = await response.json();
-      const assistantReply = data.reply || 'I am here to help.';
-      addMessage('assistant', assistantReply);
-      speak(assistantReply);
-    } catch (err) {
-      const fallback = 'Sorry, I could not reach the assistant service. Please try again.';
-      addMessage('assistant', fallback);
-      speak(fallback);
-      setError('There was a problem contacting the AI service.');
-    } finally {
-      setIsSending(false);
-    }
-  };
+.bubble p {
+  margin: 0;
+  line-height: 1.6;
+}
 
-  const toggleListening = () => {
-    if (!recognitionRef.current) {
-      setError('Speech recognition is not supported in your browser.');
-      return;
-    }
+.composer {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
 
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-      return;
-    }
+.composer input {
+  flex: 1;
+  background: rgba(15, 23, 42, 0.9);
+  color: white;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  padding: 14px 16px;
+  outline: none;
+}
 
-    setError('');
-    recognitionRef.current.start();
-    setIsListening(true);
-  };
+.composer button {
+  border: none;
+  background: linear-gradient(135deg, #14b8a6, #0f766e);
+  color: white;
+  border-radius: 14px;
+  padding: 14px 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
 
-  const onKeyDown = (event) => {
-    if (event.key === 'Enter') {
-      handleSend();
-    }
-  };
+.composer button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
-  return (
-    <div className="app-shell">
-      <div className="app-card">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Voice AI</p>
-            <h1>Real-Time Assistant</h1>
-          </div>
-          <button
-            className={`mic-button ${isListening ? 'live' : ''}`}
-            onClick={toggleListening}
-            disabled={isSending}
-            type="button"
-          >
-            {isListening ? 'Stop Listening' : 'Start Listening'}
-          </button>
-        </header>
+.error-box {
+  margin-top: 16px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fecaca;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
 
-        <div className="chat-panel">
-          {history.map((entry) => (
-            <div key={entry.id} className={`bubble ${entry.sender}`}>
-              <span className="label">{entry.sender === 'user' ? 'You' : 'Assistant'}</span>
-              <p>{entry.text}</p>
-            </div>
-          ))}
-        </div>
+@media (max-width: 640px) {
+  .topbar,
+  .composer {
+    flex-direction: column;
+  }
 
-        {error && <div className="error-box">{error}</div>}
-
-        <div className="composer">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Type your message here..."
-            aria-label="Message input"
-          />
-          <button onClick={() => handleSend()} disabled={isSending || !message.trim()}>
-            {isSending ? 'Thinking...' : 'Send'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  .bubble {
+    max-width: 100%;
+  }
 }

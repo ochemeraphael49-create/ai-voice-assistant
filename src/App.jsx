@@ -8,7 +8,7 @@ export default function App() {
     {
       id: 1,
       sender: 'assistant',
-      text: 'Hi! I am your AI assistant. Ask me anything, or use the mic to speak.',
+      text: 'Hi! I am your real AI assistant. Ask me anything, or use the mic to speak.',
     },
   ]);
   const [isListening, setIsListening] = useState(false);
@@ -31,7 +31,7 @@ export default function App() {
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      setMessage((prev) => prev ? `${prev} ${transcript}`.trim() : transcript);
+      setMessage((prev) => (prev ? `${prev} ${transcript}`.trim() : transcript));
     };
 
     recognition.onend = () => {
@@ -88,14 +88,20 @@ export default function App() {
       });
 
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'AI service request failed.');
+      }
+
       const assistantReply = data.reply || 'I am here to help.';
       addMessage('assistant', assistantReply);
       speak(assistantReply);
     } catch (err) {
-      const fallback = 'Sorry, I could not reach the assistant service. Please try again.';
+      const fallback =
+        err.message || 'The AI service is not configured yet. Add a valid API key in .env to enable live AI responses.';
       addMessage('assistant', fallback);
       speak(fallback);
-      setError('There was a problem contacting the AI service.');
+      setError(fallback);
     } finally {
       setIsSending(false);
     }
@@ -103,7 +109,7 @@ export default function App() {
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
-      setError('Speech recognition is not supported in your browser.');
+      setError('Speech recognition is not supported in your browser. Use Chrome or Edge for voice input.');
       return;
     }
 

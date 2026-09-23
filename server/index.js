@@ -24,22 +24,20 @@ app.post('/api/chat', async (req, res) => {
 
   const prompt = String(message).trim();
 
-  try {
-    if (!process.env.OPENAI_API_KEY) {
-      return res.json({
-        reply:
-          `Demo assistant reply: You asked, "${prompt}". This app is ready for live AI integration. Add your OpenAI API key in the .env file to enable real model responses.`,
-      });
-    }
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({
+      error: 'OPENAI_API_KEY is not configured. Add your key to the .env file to enable real AI responses.',
+    });
+  }
 
+  try {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content:
-            'You are a helpful, friendly AI assistant. Keep replies concise and natural.',
+          content: 'You are a helpful, friendly AI assistant. Keep replies concise and natural.',
         },
         { role: 'user', content: prompt },
       ],
@@ -54,8 +52,7 @@ app.post('/api/chat', async (req, res) => {
   } catch (error) {
     console.error('OpenAI request failed:', error);
     return res.status(500).json({
-      reply:
-        'The AI service is temporarily unavailable. Please try again later or use the demo mode.',
+      error: 'The AI service is temporarily unavailable. Please verify your API key and billing status.',
     });
   }
 });

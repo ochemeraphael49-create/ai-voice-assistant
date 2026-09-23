@@ -21,12 +21,12 @@ A React starter app for a real-time AI assistant with:
    npm install
    ```
 
-2. Copy the environment file:
+2. Create your environment file:
    ```bash
    cp .env.example .env
    ```
 
-3. Add your OpenAI key to `.env`:
+3. Add your real OpenAI API key to `.env`:
    ```bash
    OPENAI_API_KEY=your_key_here
    ```
@@ -40,8 +40,12 @@ A React starter app for a real-time AI assistant with:
    - Frontend: http://localhost:5173
    - Backend: http://localhost:3001
 
+## Important
+
+This is not demo mode. It is production-ready for real AI when you provide a valid `OPENAI_API_KEY`.
+Without a key, the app will refuse to generate responses and instead show a configuration error.
+
 ## Notes
 
-- The app works in demo mode without an API key.
-- Browser speech recognition works in supported browsers such as Chrome and Edge.
-- To enable real AI responses, add your OpenAI key to `.env`.
+- Browser voice recognition works best in Chrome or Edge.
+- For true live spoken conversations, use the OpenAI Realtime API or a dedicated WebRTC voice pipeline.

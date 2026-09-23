@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: auralis-ai
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_REALTIME_MODEL
+        value: gpt-4o-realtime-preview
+      - key: OPENAI_VOICE
+        value: alloy
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false

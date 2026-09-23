@@ -1,51 +1,22 @@
-# AI Voice Assistant
+# Auralis AI assistant
 
-A React starter app for a real-time AI assistant with:
+A premium React voice assistant with OpenAI Realtime voice streaming, Supabase authentication, and a production Express server.
 
-- speech-to-text microphone support
-- live chat interface
-- AI replies via backend API
-- text-to-speech feedback
-- modern responsive UI
+## Local setup
 
-## Tech stack
+```bash
+cp .env.example .env
+npm install
+npm run dev
+```
 
-- React + Vite
-- Express backend
-- OpenAI API integration ready
+Add `OPENAI_API_KEY` for AI and realtime voice. Add a Supabase project URL and anon key for real email/password accounts. Enable Email auth in Supabase Authentication settings.
 
-## Setup
+## Deploy to Render
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+1. Create a new Web Service from this repository.
+2. Render can use the included `render.yaml`, or use build command `npm install && npm run build` and start command `npm start`.
+3. Add the environment variables shown in `.env.example` in Render. Never expose `OPENAI_API_KEY` in `VITE_*` variables.
+4. In Supabase Authentication > URL Configuration, set the deployed URL as the site URL.
 
-2. Create your environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Add your real OpenAI API key to `.env`:
-   ```bash
-   OPENAI_API_KEY=your_key_here
-   ```
-
-4. Run the app:
-   ```bash
-   npm run dev
-   ```
-
-5. Open the app in your browser:
-   - Frontend: http://localhost:5173
-   - Backend: http://localhost:3001
-
-## Important
-
-This is not demo mode. It is production-ready for real AI when you provide a valid `OPENAI_API_KEY`.
-Without a key, the app will refuse to generate responses and instead show a configuration error.
-
-## Notes
-
-- Browser voice recognition works best in Chrome or Edge.
-- For true live spoken conversations, use the OpenAI Realtime API or a dedicated WebRTC voice pipeline.
+Realtime voice uses WebRTC. The server creates a short-lived OpenAI client secret, so the permanent API key never reaches the browser.

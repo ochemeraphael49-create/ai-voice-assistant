@@ -1,178 +1,94 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 export default function App() {
-  const [message, setMessage] = useState('');
-  const [history, setHistory] = useState([
-    {
-      id: 1,
-      sender: 'assistant',
-      text: 'Hi! I am your real AI assistant. Ask me anything, or use the mic to speak.',
-    },
-  ]);
-  const [isListening, setIsListening] = useState(false);
-  const [isSending, setIsSending] = useState(false);
+  const [session, setSession] = useState(null);
+  const [authMode, setAuthMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [messages, setMessages] = useState([{ role: 'assistant', text: 'Welcome to Auralis. I am ready when you are.' }]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [voiceState, setVoiceState] = useState('idle');
   const [error, setError] = useState('');
-  const recognitionRef = useRef(null);
-
-  const SpeechRecognition = useMemo(() => {
-    const win = window;
-    return win.SpeechRecognition || win.webkitSpeechRecognition || null;
-  }, []);
+  const peerRef = useRef(null);
+  const streamRef = useRef(null);
+  const channelRef = useRef(null);
 
   useEffect(() => {
-    if (!SpeechRecognition) return;
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setMessage((prev) => (prev ? `${prev} ${transcript}`.trim() : transcript));
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognition.onerror = () => {
-      setError('Microphone recognition failed. Please try again.');
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-
-    return () => {
-      recognition.stop();
-    };
-  }, [SpeechRecognition]);
-
-  const addMessage = (sender, text) => {
-    setHistory((prev) => [
-      ...prev,
-      {
-        id: Date.now() + Math.random(),
-        sender,
-        text,
-      },
-    ]);
+  const authenticate = async (event) => {
+    event.preventDefault();
+    if (!supabase) { setAuthError('Connect Supabase by adding VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.'); return; }
+    setAuthBusy(true); setAuthError('');
+    const result = authMode === 'login'
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password });
+    if (result.error) setAuthError(result.error.message);
+    else if (authMode === 'signup') setAuthError('Check your email to confirm your account.');
+    setAuthBusy(false);
   };
 
-  const speak = (text) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-    window.speechSynthesis.speak(utterance);
-  };
+  const signOut = () => supabase?.auth.signOut();
 
-  const handleSend = async (textOverride) => {
-    const content = (textOverride ?? message).trim();
-    if (!content || isSending) return;
-
-    setError('');
-    setIsSending(true);
-    setMessage('');
-    addMessage('user', content);
-
+  const sendMessage = async (event) => {
+    event?.preventDefault();
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput(''); setBusy(true); setError(''); setMessages((old) => [...old, { role: 'user', text }]);
     try {
-      const response = await fetch(`${API_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content }),
-      });
-
+      const response = await fetch(`${API_URL}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text }) });
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'AI service request failed.');
-      }
-
-      const assistantReply = data.reply || 'I am here to help.';
-      addMessage('assistant', assistantReply);
-      speak(assistantReply);
-    } catch (err) {
-      const fallback =
-        err.message || 'The AI service is not configured yet. Add a valid API key in .env to enable live AI responses.';
-      addMessage('assistant', fallback);
-      speak(fallback);
-      setError(fallback);
-    } finally {
-      setIsSending(false);
-    }
+      if (!response.ok) throw new Error(data.error || 'Request failed');
+      setMessages((old) => [...old, { role: 'assistant', text: data.reply }]);
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
 
-  const toggleListening = () => {
-    if (!recognitionRef.current) {
-      setError('Speech recognition is not supported in your browser. Use Chrome or Edge for voice input.');
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-      return;
-    }
-
-    setError('');
-    recognitionRef.current.start();
-    setIsListening(true);
+  const stopVoice = () => {
+    channelRef.current?.close(); peerRef.current?.close(); streamRef.current?.getTracks().forEach((track) => track.stop());
+    channelRef.current = null; peerRef.current = null; streamRef.current = null; setVoiceState('idle');
   };
 
-  const onKeyDown = (event) => {
-    if (event.key === 'Enter') {
-      handleSend();
-    }
+  const startVoice = async () => {
+    if (voiceState !== 'idle') { stopVoice(); return; }
+    try {
+      setError(''); setVoiceState('connecting');
+      const tokenResponse = await fetch(`${API_URL}/realtime-token`, { method: 'POST' });
+      const token = await tokenResponse.json();
+      if (!tokenResponse.ok) throw new Error(token.error || 'Could not create voice session');
+      const peer = new RTCPeerConnection();
+      const audio = new Audio(); audio.autoplay = true;
+      peer.ontrack = (event) => { audio.srcObject = event.streams[0]; };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+      const channel = peer.createDataChannel('oai-events');
+      channel.onopen = () => { setVoiceState('live'); channel.send(JSON.stringify({ type: 'session.update', session: { modalities: ['text', 'audio'], instructions: 'You are Auralis, a concise and warm personal assistant.' } })); };
+      channel.onerror = () => setError('Voice connection failed.');
+      peerRef.current = peer; streamRef.current = stream; channelRef.current = channel;
+      const offer = await peer.createOffer(); await peer.setLocalDescription(offer);
+      const answer = await fetch(`https://api.openai.com/v1/realtime?model=${token.model}`, { method: 'POST', headers: { Authorization: `Bearer ${token.client_secret}`, 'Content-Type': 'application/sdp' }, body: offer.sdp });
+      if (!answer.ok) throw new Error('OpenAI voice connection failed');
+      await peer.setRemoteDescription({ type: 'answer', sdp: await answer.text() });
+    } catch (err) { stopVoice(); setError(err.message || 'Microphone permission is required.'); }
   };
 
-  return (
-    <div className="app-shell">
-      <div className="app-card">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Voice AI</p>
-            <h1>Real-Time Assistant</h1>
-          </div>
-          <button
-            className={`mic-button ${isListening ? 'live' : ''}`}
-            onClick={toggleListening}
-            disabled={isSending}
-            type="button"
-          >
-            {isListening ? 'Stop Listening' : 'Start Listening'}
-          </button>
-        </header>
+  if (!session) return <AuthScreen mode={authMode} setMode={setAuthMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={authBusy} error={authError} onSubmit={authenticate} />;
 
-        <div className="chat-panel">
-          {history.map((entry) => (
-            <div key={entry.id} className={`bubble ${entry.sender}`}>
-              <span className="label">{entry.sender === 'user' ? 'You' : 'Assistant'}</span>
-              <p>{entry.text}</p>
-            </div>
-          ))}
-        </div>
+  return <main className="app-shell"><div className="app-window"><aside className="sidebar"><div className="logo"><span>✦</span><strong>Auralis</strong></div><div className="profile"><div className="avatar">{session.user.email?.[0].toUpperCase()}</div><div><b>{session.user.email?.split('@')[0]}</b><small>Personal workspace</small></div></div><div className="side-note"><span className="pulse-dot" /> Voice ready<br /><small>Private and secure</small></div><button className="signout" onClick={signOut}>↪ Sign out</button></aside><section className="workspace"><header className="workspace-header"><div><span className="kicker">PERSONAL AI COMPANION</span><h1>Your thinking, amplified.</h1><p>Talk naturally, ask anything, and get things done.</p></div><div className="online"><i /> Online</div></header><div className="conversation">{messages.map((message, index) => <div key={index} className={`message ${message.role}`}><div className="message-icon">{message.role === 'assistant' ? '✦' : session.user.email?.[0].toUpperCase()}</div><div><span className="message-label">{message.role === 'assistant' ? 'Auralis' : 'You'}</span><p>{message.text}</p></div></div>)}{busy && <div className="typing"><i /><i /><i /> Thinking</div>}</div>{error && <div className="error-box">{error}</div>}<div className="composer"><form onSubmit={sendMessage}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask Auralis anything..." /><button className="send" disabled={busy || !input.trim()}>↑</button></form><button className={`voice ${voiceState}`} onClick={startVoice}>{voiceState === 'live' ? '■ End live conversation' : voiceState === 'connecting' ? 'Connecting…' : '◉ Start live conversation'}</button><small>Press the button to speak in real time. Your microphone stays private.</small></div></section></div></main>;
+}
 
-        {error && <div className="error-box">{error}</div>}
-
-        <div className="composer">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Type your message here..."
-            aria-label="Message input"
-          />
-          <button onClick={() => handleSend()} disabled={isSending || !message.trim()}>
-            {isSending ? 'Thinking...' : 'Send'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function AuthScreen({ mode, setMode, email, setEmail, password, setPassword, busy, error, onSubmit }) {
+  return <main className="auth-shell"><div className="auth-card"><div className="auth-brand"><span>✦</span><strong>Auralis</strong></div><span className="kicker">PRIVATE AI COMPANION</span><h1>{mode === 'login' ? 'Welcome back.' : 'Create your space.'}</h1><p className="auth-subtitle">{mode === 'login' ? 'Continue your conversations, privately.' : 'A calmer, smarter way to get things done.'}</p><form onSubmit={onSubmit}><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="you@example.com" /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength="6" placeholder="••••••••" /></label>{error && <div className="auth-error">{error}</div>}<button className="primary-button" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}</button></form><button className="switch-auth" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>{mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}</button><small>By continuing, you agree to use Auralis responsibly.</small></div></main>;
 }
